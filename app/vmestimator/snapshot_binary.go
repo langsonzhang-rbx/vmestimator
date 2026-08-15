@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/bytesutil"
@@ -106,11 +107,25 @@ func readString(r io.Reader, dst *string) (string, error) {
 	return *dst, nil
 }
 
+var snapshotBufPool sync.Pool
+
+func getSnapshotBuf() *bytesWriter {
+	if v := snapshotBufPool.Get(); v != nil {
+		bw := v.(*bytesWriter)
+		bw.buf = bw.buf[:0]
+		return bw
+	}
+	return &bytesWriter{buf: make([]byte, 0, 64*1024)}
+}
+
+func putSnapshotBuf(bw *bytesWriter) {
+	snapshotBufPool.Put(bw)
+}
+
 // encodeSnapshot writes a snapshot in binary format to w.
 func encodeSnapshot(w io.Writer, s *snapshot) error {
-	// Encode to a buffer first so we can write the length prefix
-	var buf []byte
-	bw := &bytesWriter{buf: buf}
+	bw := getSnapshotBuf()
+	defer putSnapshotBuf(bw)
 
 	if err := writeSnapshotBody(bw, s); err != nil {
 		return err
@@ -121,6 +136,19 @@ func encodeSnapshot(w io.Writer, s *snapshot) error {
 	}
 	_, err := w.Write(bw.buf)
 	return err
+}
+
+var sketchBufPool sync.Pool
+
+func getSketchBuf() []byte {
+	if v := sketchBufPool.Get(); v != nil {
+		return v.([]byte)[:0]
+	}
+	return make([]byte, 0, 4096)
+}
+
+func putSketchBuf(buf []byte) {
+	sketchBufPool.Put(buf)
 }
 
 func writeSnapshotBody(w io.Writer, s *snapshot) error {
@@ -170,13 +198,17 @@ func writeSnapshotBody(w io.Writer, s *snapshot) error {
 				return err
 			}
 		}
-		sketchBytes, err := ssk.Sketch.MarshalBinary()
+		sketchBuf := getSketchBuf()
+		sketchBytes, err := ssk.Sketch.AppendBinary(sketchBuf)
 		if err != nil {
+			putSketchBuf(sketchBuf)
 			return fmt.Errorf("marshal sketch: %w", err)
 		}
 		if err := writeBytes(w, sketchBytes); err != nil {
+			putSketchBuf(sketchBuf)
 			return err
 		}
+		putSketchBuf(sketchBuf)
 	}
 	return nil
 }

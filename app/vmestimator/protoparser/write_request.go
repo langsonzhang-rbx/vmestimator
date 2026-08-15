@@ -121,18 +121,10 @@ func (ts *TimeSerie) unmarshalProtobuf(src []byte, labelsPool []Label, fpLabels 
 	tsD := getDigest()
 	defer putDigest(tsD)
 
-	digestLabel := func(value []byte) uint64 {
-		return 0
-	}
+	var ld *xxhash.Digest
 	if fpLabels {
-		ld := getDigest()
+		ld = getDigest()
 		defer putDigest(ld)
-
-		digestLabel = func(value []byte) uint64 {
-			ld.Reset()
-			_, _ = ld.Write(value)
-			return ld.Sum64()
-		}
 	}
 
 	labelsPoolLen := len(labelsPool)
@@ -173,10 +165,18 @@ func (ts *TimeSerie) unmarshalProtobuf(src []byte, labelsPool []Label, fpLabels 
 			}
 
 			_, _ = tsD.Write(data)
+
+			var labelFP uint64
+			if fpLabels {
+				ld.Reset()
+				_, _ = ld.Write(valueBytes)
+				labelFP = ld.Sum64()
+			}
+
 			labelsPool = append(labelsPool, Label{
 				Name:        bytesutil.ToUnsafeString(nameBytes),
 				Value:       bytesutil.ToUnsafeString(valueBytes),
-				Fingerprint: digestLabel(valueBytes),
+				Fingerprint: labelFP,
 			})
 		}
 	}

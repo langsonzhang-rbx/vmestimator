@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/gob"
 	"fmt"
 	"io"
 	"slices"
@@ -77,21 +76,9 @@ func newSnapshot() *snapshot {
 	}
 }
 
-// decodeSnapshot reads a stream of gob-encoded EstimatorMerge objects from the response and merges them into the provided estimatorMerge object.
+// decodeSnapshot reads a stream of binary-encoded snapshot objects from the response and merges them.
 func decodeSnapshots(r io.Reader, cb func(s *snapshot)) error {
-	d := gob.NewDecoder(r)
-	s := newSnapshot()
-	for {
-		s.reset()
-		if err := d.Decode(s); err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-
-		cb(s)
-	}
+	return decodeSnapshotsBinary(r, cb)
 }
 
 func (s *snapshot) merge(other *snapshot) {

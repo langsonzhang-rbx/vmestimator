@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/gob"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -72,12 +71,13 @@ func TestGlobalSnapshot(t *testing.T) {
 
 		// test encode/decode snapshot produce same result
 		buf.Reset()
-		enc := gob.NewEncoder(buf)
 		if err := e.toSnapshot(func(s *snapshot) error {
-			return enc.Encode(s)
+			return encodeSnapshot(buf, s)
 		}); err != nil {
 			t.Fatalf("toSnapshot: %v", err)
 		}
+		// Write end-of-stream marker
+		writeUint32(buf, 0)
 		ss := newSnapshots()
 		if err := decodeSnapshots(buf, func(s *snapshot) {
 			ss.add(s)
@@ -244,12 +244,13 @@ func TestGroupSnapshot(t *testing.T) {
 
 		// test encode/decode snapshot produce same result
 		buf.Reset()
-		enc := gob.NewEncoder(buf)
 		if err := e.toSnapshot(func(s *snapshot) error {
-			return enc.Encode(s)
+			return encodeSnapshot(buf, s)
 		}); err != nil {
 			t.Fatalf("toSnapshot: %v", err)
 		}
+		// Write end-of-stream marker
+		writeUint32(buf, 0)
 		ss := newSnapshots()
 		if err := decodeSnapshots(buf, func(s *snapshot) {
 			ss.add(s)
@@ -552,12 +553,13 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 
 		// test encode/decode snapshot produce same result
 		buf.Reset()
-		enc := gob.NewEncoder(buf)
 		if err := e.toSnapshot(func(s *snapshot) error {
-			return enc.Encode(s)
+			return encodeSnapshot(buf, s)
 		}); err != nil {
 			t.Fatalf("toSnapshot: %v", err)
 		}
+		// Write end-of-stream marker
+		writeUint32(buf, 0)
 		ss := newSnapshots()
 		if err := decodeSnapshots(buf, func(s *snapshot) {
 			ss.add(s)

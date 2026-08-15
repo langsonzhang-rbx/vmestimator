@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/gob"
 	"flag"
 	"io"
 	"net/http"
@@ -118,15 +117,18 @@ func main() {
 			w.Header().Set("Transfer-Encoding", "chunked")
 			w.WriteHeader(http.StatusOK)
 
-			bw := bufio.NewWriterSize(w, 64*1024)
-			enc := gob.NewEncoder(bw)
-			for _, e := range es {
-				if err := e.toSnapshot(func(s *snapshot) error {
-					return enc.Encode(s)
-				}); err != nil {
-					logger.Errorf("write snapshot binary: %s", err)
-				}
+		bw := bufio.NewWriterSize(w, 64*1024)
+		for _, e := range es {
+			if err := e.toSnapshot(func(s *snapshot) error {
+				return encodeSnapshot(bw, s)
+			}); err != nil {
+				logger.Errorf("write snapshot binary: %s", err)
 			}
+		}
+		// Write end-of-stream marker
+		if err := writeUint32(bw, 0); err != nil {
+			logger.Errorf("write end-of-stream marker: %s", err)
+		}
 			if err := bw.Flush(); err != nil {
 				logger.Errorf("flush snapshot binary: %s", err)
 			}
